@@ -1,0 +1,290 @@
+---
+title: "Mehrfaktorielle Varianzanalyse (ohne Messwiederholung)"
+output:
+  html_document:
+    df_print: paged
+---
+
+1) Hypothese 
+2) Voraussetzungen für die mehrfaktorielle Varianzanalyse (ohne Messwiederholung) 
+3) Normalverteilung 
+4) Grundlegende Konzepte der mehrfaktorielle Varianzanalyse – Was ist das ? 
+5) Boxplot
+6) Deskriptive Statistiken 
+7) Profildiagramm
+8) Levene -Test 
+9) Ergebnisse der mehrfaktorielle Varianzanalyse (ohne Messwiederholung)
+10) Post-Hoc-Test
+11) Berechnung der Effektstärke
+
+# Datensatz
+2008-09: 9 Monate eines Professorengehalts für Assistant Professors, Associate Professors und Professoren eines Colleges in der USA. <br>
+
+Var 1 = Sex (male/female) <br>
+Var 2 = Discipline (A “theoretical” departments und B “applied” departments) <br>
+Var 3 = Salary (in USD) <br>
+
+# Hypothese 
+Haupteffekt A - Geschlecht<br>
+H1: Es gibt einen Unterschied zwischen Geschlecht (weiblich/männlich) und dem Einkommen.<br>
+H0: Es gibt keinen Unterschied zwischen Geschlecht (weiblich/männlich) und dem Einkommen.<br>
+
+Haupteffekt B -  Lehrstuhltyp<br>
+H1: Es gibt einen Unterschied zwischen dem Lehrstuhltyp (theoretisch / praktisch) und dem Einkommen.<br>
+H0: Es gibt keinen Unterschied zwischen dem Lehrstuhltyp (theoretisch / praktisch) und dem Einkommen.<br>
+
+Interaktion AxB - Geschlecht x Discipline<br>
+H1: Es gibt einen Unterschied zwischen der Geschlecht(weiblich/männlich), der Wahl der Ausrichtung (theoretisch / praktisch) und dem Einkommen.<br>
+H0: Es gibt keinen Unterschied zwischen der Geschlecht(weiblich/männlich), der Wahl der Ausrichtung (theoretisch / praktisch) und dem Einkommen.<br>
+
+# Voraussetzungen für die mehrfaktorielle Varianzanalyse (ohne Messwiederholung) 
+
+- Die abhängige Variable ist intervallskaliert -> Gehalt in USD ist ratioskaliert 
+- Die unabhängigen Variablen (Faktoren) sind kategorial (nominal- oder ordinalskaliert) -> Geschlecht ist dichotom, die Wahl der Ausrichtung ebenfalls.
+- Die durch die Faktoren gebildeten Gruppen sind unabhängig -> gegeben
+- Die abhängige Variablen ist normalverteilt innerhalb jeder der Gruppen. -> ja, grafische Beurteilung anhand der Histogramme (siehe weiter unten)
+- Homogenität der Varianzen: Die Gruppen stammen aus Grundgesamtheiten mit annähernd identischen Varianzen der abhängigen Variablen (siehe Levene-Test) -> Varianzhomogenität
+
+# Grundlegende Konzepte der mehrfaktorielle Varianzanalyse – Was ist das ? 
+Die mehrfaktorielle Varianzanalyse testet, ob sich die Mittelwerte mehrerer unabhängiger Gruppen unterscheiden, die durch mehrere kategoriale unabhängige Variable definiert werden.
+Diese unabhängigen Variablen werden im Kontext der Varianzanalyse als "Faktoren" bezeichnet. Als "mehrfaktoriell" wird eine Varianzanalyse bezeichnet, wenn sie mehr als einen Faktor, also mehrere Gruppierungsvariablen, verwendet.
+
+Das Prinzip der Varianzanalyse besteht in der Zerlegung der Varianz der abhängigen Variable. Die Gesamtvarianz setzt sich aus der sogenannten "Varianz innerhalb der Gruppen" und der "Varianz zwischen den Gruppen" zusammen. Bei einer mehrfaktoriellen Varianzanalyse wird die Varianz zwischen den Gruppen weiter aufgegliedert, und zwar in die Varianz der einzelnen Faktoren und die Varianz der Interaktion(en) der Faktoren. Im Rahmen einer Varianzanalyse wird die Varianz zwischen den Gruppen mit der Varianz innerhalb der Gruppen verglichen.
+
+# Daten laden & Exploration
+```{r}
+#Libraries impotieren
+library(dplyr)
+library(ggplot2)
+library(stats)
+library(psych)
+library(dplyr)
+
+salaries <- read.csv("Salaries.csv")
+#View(salaries)
+```
+
+## Exploration
+```{r}
+glimpse(salaries)
+```
+
+Ausgabe der Datentypen und Spalten; Sichtprüfung technisch.
+
+```{r}
+hist(salaries$salary
+     ,main = "Verteilung der Gehälter für ProfessorInnen \n für das akademische Jahr 2008-2009"
+     ,ylab = "Anzahl"
+     ,xlab = "Gehalt \n (9 Monate in USD)"
+     ,col = "grey")
+```
+
+Blick auf die Verteilung der Gehaltsstruktur, um später Plausibilität besser abschätzen zu können.
+
+## Analyse der Häufigkeit der Daten in den verschiedenen Dimensionen
+```{r}
+table(salaries$sex)
+```
+
+```{r}
+table(salaries$discipline, salaries$sex)
+```
+
+Leider deutlich mehr Männer als Frauen, daher ein unbalanced Design. (!Wichtig für spätere Analyse und Rückschlüsse)
+
+
+## Scatterplott zur Sichtung der Ausreißer
+```{r}
+ggplot(salaries, aes(x = sex, y = salary, color = sex)) +
+    geom_boxplot()+
+    geom_point(size = 1, position = position_jitter(width = 0.2)) +
+    stat_summary(fun.y = mean, geom = "point", shape = 20, size = 3, color = "blue")+
+    theme_classic() +
+    facet_grid(.~rank)
+```
+
+Alternativ (insb. bei mehr Datenpunkten) hätte man auch eine Violinendarstellug wählen können.
+
+# Deskriptive Statistiken 
+```{r}
+describe(salaries)
+```
+
+```{r}
+salaries %>%
+group_by(sex) %>%
+  summarise(Anzahl = n(), Mittelwert = mean(salary), Median = median(salary), Standardabweichung = sd(salary)) %>%
+  mutate_if(is.numeric, round, 2)
+```
+
+Deutlich zu erkennen ist ein Mittelwertsunterschied zwischen Frauen (M=101002.4, SD=25952.13, n=39) und den
+Männer (M=115090.4, SD=30436.93 n=358). Insbesondere bei den Männern liegt der Mittelwert oberhalb des Median (7047.4 USD).
+
+```{r}
+salaries %>%
+group_by(discipline) %>%
+  summarise(Anzahl = n(), Mittelwert = mean(salary), Median = median(salary), Standardabweichung = sd(salary)) %>%
+  mutate_if(is.numeric, round, 2)
+```
+
+A “Theoretische” Lehrstühle (M=108548.4, SD=30538.15, n=181 ) und B “Praktische” Lehrstühle (M=118028.7, SD=29459.14, n=216 ) weisen einen Mittelwertsunterschied von rund 10.000 USD auf. 
+
+```{r}
+salaries %>%
+group_by(discipline, sex) %>%
+  summarise(Anzahl = n(), Mittelwert = mean(salary), Median = median(salary), Standardabweichung = sd(salary)) %>%
+  mutate_if(is.numeric, round, 2)
+```
+
+Es zeigt sich in der Interaktion ein deutlicher Mittelwertsunterschied bei Frauen und Männern für den Lehrstuhltyp "theoretisch", bei den praktischen Lehrstühlen fällt der Unterschied geringer aus.
+
+# Histogramme
+
+```{r}
+salaries %>%
+  group_by(discipline) %>%
+  ggplot(aes(salary, color=discipline)) + 
+  geom_histogram(aes(fill = discipline), bins = 20) +
+  facet_wrap(~discipline) +
+  theme_grey()+
+  labs(x= "Einkommen in USD",y = "Anzahl" )+
+  scale_fill_discrete(name = "Lehrstuhl",
+  labels = c("Theroretisch (A)", "Angewandt(B)"))+
+  guides(color = FALSE)
+```
+
+Nach optischer Prüfung noch annehmbare Normalverteilung der Einkommen bezogen auf die Einteilung der Lehrstühle. 
+
+```{r}
+salaries %>%
+  group_by(sex) %>%
+  ggplot(aes(salary, color=sex)) + 
+  geom_histogram(aes(fill = sex), bins = 20) +
+  facet_wrap(~sex) +
+  theme_grey()+
+  labs(x= "Einkommen in USD",y = "Anzahl" )
+```
+
+Die Normalverteilung der Daten nicht ideal, aber noch im annehmbaren Rahmen.
+
+```{r}
+ggplot(salaries, aes(x=salary))+
+geom_histogram(bins = 25)+
+theme_grey()+
+facet_wrap(sex~discipline, ncol = 2)
+```
+
+Aufgrund der geringen Zahl der Datenpunkte bei Frauen, ergibt sich hier leider kein eindeutiges Bild für die Interaktion in Bezug auf die Normalverteilung. 
+
+## Profildiagramm
+```{r}
+ggplot(salaries, aes(x=sex, y=salary, group=discipline, color=discipline))+
+  stat_summary(fun = mean, geom="point", size=3)+
+  stat_summary(fun = mean, geom="line")+
+  stat_summary(fun.data = mean_cl_normal, geom="errorbar",width=.2, size=.25)+
+  labs(x="Geschlecht", y="Einkommen in USD")+
+  scale_color_discrete(name = "Lehrstuhl",
+  labels = c("Theroretisch (A)", "Angewandt(B)"))+
+  theme_classic()
+```
+
+Dem Diagramm ist optisch ein Unterschied beim Gehalt, sowohl für die Art des Lehrstuhls, als auch ein Geschlechterunterschied zu entnehmen.
+
+# Levene -Test 
+```{r}
+library(car)
+leveneTest(salary ~ sex*discipline, data = salaries, center = "mean")
+```
+
+Im vorliegenden Beispiel ist der Levene-Test nicht signifikant (F(3,393) = 1.0745, p = .3597 ), sodass nicht von einer Varianzheterogenität ausgegangen werden kann. <br> Ohne Welch-Korrektur: p > 0.05 => Ergebnis nicht Signifikant –> Varianzen homogen –> H0 mit Annahme 
+
+# Ergebnisse der mehrfaktorielle Varianzanalyse (ohne Messwiederholung)
+Korrektur nach Welch nicht erforderlich
+
+## Ohne Welch
+```{r}
+mehrAnova1 <- lm(salary ~ sex*discipline, data = salaries)
+myAnova <- Anova(mehrAnova1 , type = 3)
+myAnova
+myAnova$Df
+```
+
+* Für den Faktor Geschlecht wird ein Haupteffekt ersichtlich. Das Gehalt scheint abhängig vom Geschlecht zu sein(F(1,393) = 8.6234, p=.003514).
+* Für den Faktor Lehrstuhltyp wird ein Haupteffekt ersichtlich. Das Gehalt scheint abhängig vom Lehrstuhltyp (theoretisch/angewand) zu sein(F(1,393) = 5.4141, p=.02048).
+* Der Interaktionsterm von Geschlecht(sex) und Lehrstuhltyp (discipline) ist nicht signifikant. (F(1, 393)=1.9770, p=.16), die Bezahlung ist also nicht von einer Kombination von Lehrstuhltyp und Geschlecht abhängig.
+
+
+## Mit Welch
+Überprüfung nur zur Sicherheit!
+```{r}
+sexwelch <- oneway.test(salary~sex, data = salaries, var.equal = F)
+sexwelch
+```
+
+```{r}
+disciplinewelch <- oneway.test(salary~discipline, data = salaries, var.equal = F)
+disciplinewelch
+```
+
+# Post-Hoc-Test
+
+```{r}
+PostHoc <- aov(salary ~ sex*discipline, data=salaries)
+TukeyHSD(PostHoc)
+```
+
+Es ist deutlich zu sehen, dass Frauen 14088.01 USD weniger verdienen und dieses Ergebnis ist mit p=.005 auch signifikant. Ebenso bestätigt sich der Unterschied zwischen den Lehrstuhltypen "theoretisch" und "praktisch" p=.001.
+
+Wie vermutet zeichnet sich bei der Interaktion von Geschlecht und Lehrstuhltyp kein Unterschied ab. Es können keine Gruppen gebildet werden. 
+
+
+# Berechnung der Effektstärke
+Das partielle Eta-Quadrat (partielles η2) ist in Abbildung ausgegeben. Es ist ein Mass für die Effektgrösse: Es setzt die Variation, die durch einen Faktor erklärt wird, in Bezug mit jener Variation, die nicht durch andere Faktoren im Modell erklärt wird. Das heißt, es wird ausschliesslich jene Variation betrachtet, welche nicht durch die anderen Faktoren im Modell erklärt wird.
+
+```{r}
+library(sjstats)
+eta <- eta_sq(mehrAnova1, partial = TRUE)
+eta
+```
+
+Im vorliegenden Beispiel lassen sich über das Geschlecht 2% und über den Lehrstuhltyp 2,5% der Effekte erklären. Da der Interaktionsterm nicht signifikant ist, spielt er keine Rolle und wird verworfen.
+
+## Effektstärke Geschlecht
+```{r}
+effsex <- sqrt(eta$partial.etasq[1]/(1-eta$partial.etasq[1]))
+
+sprintf("Effektstärke für das Geschlecht: f= %.3f", effsex)
+```
+
+## Effektstärke Lehrstuhltyp
+```{r}
+effdiscipline <- sqrt(eta$partial.etasq[2]/(1-eta$partial.etasq[2]))
+
+sprintf("Effektstärke für das Lehrstuhltyp: f= %.3f", effdiscipline)
+```
+## Effektstärke Interaktion
+```{r}
+effAxB <- sqrt(eta$partial.etasq[3]/(1-eta$partial.etasq[3]))
+
+sprintf("Effektstärke für das Interaktion: f= %.3f", effAxB)
+```
+Um zu beurteilen, wie gross dieser Effekt ist, kann man sich an der Einteilung von Cohen (1988) orientieren. 
+
+\begin{align}
+\text{Schwacher Effekt: } 0.10 &< ||f|| < 0.25             \\
+\text{Schwacher bis mittlerer Effekt: } 0.25 &= ||f||      \\
+\text{Mittlerer Effekt: } 0.25 &< ||f|| < 0.40             \\
+\text{Mittlerer bis starker Effekt: }0.40 &= ||f||         \\
+\text{Starker Effekt: } 0.40 &< ||f||        
+\end{align}
+
+Es handelt sich um schwache Effekte. (Geschlecht/ Hochschultyp)
+
+
+# Aussage
+Es zeigt sich, dass das Geschlecht einen Effekt auf die Bezahlung hat, eine Frau erhält 14088.01 USD weniger (F(1,393) = 8.6234, p=.003514). H1 fürs Geschlecht wird angenommen, H0 wird verworfen. Auch die Wahl des Lehrstuhltyps hat einen Effekt auf das Gehalt (F(1,393) = 5.4141, p=.02048), an den praxisbezogenen Lehrstühlen wird mehr bezahlt. H1 wird angenommen und H0 verworfen. Der Interaktionsterm von Geschlecht und Lehrstuhl ist jedoch nicht signifikant (F(1, 393)=1.9770, p=.16). Die H1 wird daher verworfen und H0 angenommen. 
+
+Der PostHoc wurde mit Tukey durchgeführt. Für das Geschlecht Frauen (M=101002.4, SD=25952.13, n=39) und Männer (M=115090.4, SD=30436.93 n=358) bestätigt sich der Mittelwertsunterschied. Auch für “Theoretische” Lehrstühle (M=108548.4, SD=30538.15, n=181 ) und B “Praktische” Lehrstühle (M=118028.7, SD=29459.14, n=216 ) ist ein Mittelwertsunterschied feststellbar und bestätigt. Der Interaktionsterm ist nicht signifikant (p=.16) und daher nicht relevant.
+
+Die Effektstärken für Geschlecht(f= 0.142) und Lehrstuhltyp (f= 0.159) entsprechen nach Cohen (1988) einem schwachen Effekt.
+
